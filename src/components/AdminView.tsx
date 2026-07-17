@@ -1248,6 +1248,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ albumId, spreads, settings
                   <p className="text-gray-500 mb-4 text-xs px-2">
                     Your celebration album is now live! Scan the QR code or use the unique access code below to view and guest-book from any device.
                   </p>
+                  {window.location.origin.includes("ais-dev-") && (
+                    <div className="bg-blue-50/50 text-blue-700 text-[10px] p-3 rounded-xl mb-4 text-left border border-blue-100 shadow-sm leading-relaxed">
+                      <strong>Developer Note:</strong> You are in the Development environment, so this QR code is protected. To create a public QR code that anyone can scan, please open the <strong>Shared</strong> link of this app and generate the album there.
+                    </div>
+                  )}
                   
                   {accessCode && (
                     <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 mb-5 text-center shadow-inner">

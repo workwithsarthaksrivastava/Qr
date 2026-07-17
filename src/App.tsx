@@ -54,6 +54,8 @@ export default function App() {
             setAlbums(loadedAlbums);
             setView('home');
             setLoading(false);
+            window.history.replaceState({}, "", window.location.origin);
+            alert("Album not found! Note: If you created this in the Dev environment, it will not be visible in the Shared environment unless a database is configured.");
           });
         });
     } else if (activeSharedId) {
@@ -79,6 +81,8 @@ export default function App() {
             setAlbums(loadedAlbums);
             setView('home');
             setLoading(false);
+            window.history.replaceState({}, "", window.location.origin);
+            alert("Album not found! Note: If you created this in the Dev environment, it will not be visible in the Shared environment unless a database is configured.");
           });
         });
     } else {

@@ -7,7 +7,7 @@ import {
   Plus, Trash2, Image as ImageIcon, Music, ArrowLeft, MoveUp, MoveDown, 
   LayoutTemplate, LayoutGrid, Rows2, Columns2, QrCode, RotateCw, 
   FlipHorizontal, FlipVertical, ZoomIn, ZoomOut, Check, X, RefreshCw,
-  Compass
+  Compass, Bookmark
 } from 'lucide-react';
 import { TemplateGallery } from './TemplateGallery';
 
@@ -912,6 +912,124 @@ interface AdminViewProps {
 
 export const AdminView: React.FC<AdminViewProps> = ({ spreads, settings, onSpreadsChange, onSettingsChange, onClose }) => {
   const [showQR, setShowQR] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateStep, setGenerateStep] = useState('');
+  const [albumUrl, setAlbumUrl] = useState('');
+  const [generateError, setGenerateError] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(albumUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleGenerateShare = async () => {
+    setIsGenerating(true);
+    setGenerateError('');
+    try {
+      // 1. Prepare settings copy
+      setGenerateStep('Preparing cover and audio...');
+      const uploadedSettings = { ...settings };
+      
+      // Upload cover photo if it's a Blob
+      if (settings.coverPhoto instanceof Blob) {
+        setGenerateStep('Uploading cover photo...');
+        const formData = new FormData();
+        formData.append('file', settings.coverPhoto, settings.coverPhoto.name || 'cover.jpg');
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Cover photo upload failed');
+        const data = await res.json();
+        uploadedSettings.coverPhoto = data.url;
+      }
+      
+      // Upload audio file if it's a Blob
+      if (settings.audioFile instanceof Blob) {
+        setGenerateStep('Uploading background audio...');
+        const formData = new FormData();
+        formData.append('file', settings.audioFile, settings.audioName || 'audio.mp3');
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Background audio upload failed');
+        const data = await res.json();
+        uploadedSettings.audioFile = data.url;
+      }
+
+      // 2. Upload page images
+      setGenerateStep('Uploading page images...');
+      const uploadedSpreads = await Promise.all(
+        spreads.map(async (spread, spreadIdx) => {
+          const newSpread = { ...spread };
+          
+          // Helper to upload images list
+          const uploadImagesList = async (images: (Blob | string | null)[]) => {
+            return Promise.all(
+              images.map(async (img, imgIdx) => {
+                if (img instanceof Blob) {
+                  setGenerateStep(`Uploading image for Page ${spreadIdx + 1} (slot ${imgIdx + 1})...`);
+                  const formData = new FormData();
+                  formData.append('file', img, `page-${spreadIdx}-${imgIdx}.jpg`);
+                  const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                  if (!res.ok) throw new Error(`Page image ${spreadIdx + 1} upload failed`);
+                  const data = await res.json();
+                  return data.url;
+                }
+                return img; // Keep already uploaded string URLs or nulls
+              })
+            );
+          };
+
+          if (spread.leftPage) {
+            newSpread.leftPage = {
+              ...spread.leftPage,
+              images: await uploadImagesList(spread.leftPage.images)
+            };
+          }
+          if (spread.rightPage) {
+            newSpread.rightPage = {
+              ...spread.rightPage,
+              images: await uploadImagesList(spread.rightPage.images)
+            };
+          }
+          
+          return newSpread;
+        })
+      );
+
+      // 3. Save album metadata to backend
+      setGenerateStep('Saving album configuration...');
+      const albumId = uuidv4();
+      const res = await fetch('/api/albums', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: albumId,
+          spreads: uploadedSpreads,
+          settings: uploadedSettings
+        })
+      });
+
+      if (!res.ok) throw new Error('Failed to save album to backend database');
+      const data = await res.json();
+      
+      let finalUrl = data.url;
+      if (!finalUrl || finalUrl.includes('localhost')) {
+        finalUrl = `${window.location.origin}/?album=${albumId}`;
+      } else {
+        finalUrl = finalUrl.replace('/album/', '/?album=');
+      }
+      if (finalUrl.includes('ais-dev-')) {
+        finalUrl = finalUrl.replace('ais-dev-', 'ais-pre-');
+      }
+      setAlbumUrl(finalUrl);
+      setGenerateStep('Successfully generated!');
+    } catch (err: any) {
+      console.error(err);
+      setGenerateError(err.message || 'An error occurred during album generation.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const [isEditingCover, setIsEditingCover] = useState(false);
   const [tempCoverTransform, setTempCoverTransform] = useState<ImageTransform>({
     scale: 1,
@@ -1080,17 +1198,81 @@ export const AdminView: React.FC<AdminViewProps> = ({ spreads, settings, onSprea
 
         {showQR && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowQR(false)}>
-            <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl relative" onClick={e => e.stopPropagation()}>
-              <h2 className="text-2xl font-semibold mb-2">Scan to View</h2>
-              <p className="text-gray-500 mb-6 text-sm">
-                Scan this QR code with your phone to open this album. Note: If your photos are not saved in a cloud database, they will only be visible on this current device.
-              </p>
-              <div className="bg-white p-4 inline-block rounded-xl border border-gray-200 shadow-inner mx-auto mb-6">
-                <QRCodeSVG value={window.location.href} size={200} />
-              </div>
+            <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-2xl relative animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+              <h2 className="text-2xl font-semibold mb-2">Share Live Album</h2>
+              
+              {!albumUrl && !isGenerating && !generateError && (
+                <>
+                  <p className="text-gray-500 mb-6 text-sm">
+                    Generate a unique live QR code and link so this exact album (with your songs, images, and custom themes) can be scanned and opened on any mobile phone or device!
+                  </p>
+                  <button 
+                    onClick={handleGenerateShare} 
+                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold shadow-md transition-all flex items-center justify-center gap-2"
+                  >
+                    <QrCode size={18} /> Generate Live Album & QR Code
+                  </button>
+                </>
+              )}
+
+              {isGenerating && (
+                <div className="py-8 flex flex-col items-center justify-center gap-4">
+                  <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                  <div className="text-sm font-medium text-gray-700">{generateStep}</div>
+                  <p className="text-xs text-gray-400">Uploading photos and settings to the server database...</p>
+                </div>
+              )}
+
+              {generateError && (
+                <div className="py-6 flex flex-col items-center justify-center gap-4 text-center">
+                  <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 text-2xl font-bold">!</div>
+                  <div className="text-sm font-semibold text-red-600">Generation Failed</div>
+                  <p className="text-xs text-gray-500 px-4">{generateError}</p>
+                  <button 
+                    onClick={handleGenerateShare} 
+                    className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors"
+                  >
+                    Retry Upload
+                  </button>
+                </div>
+              )}
+
+              {albumUrl && !isGenerating && (
+                <>
+                  <p className="text-gray-500 mb-6 text-xs px-2">
+                    Your celebration album is now live! Scan this unique QR code with any device to view the album with exact layouts, themes, and audio.
+                  </p>
+                  <div className="bg-white p-4 inline-block rounded-xl border border-gray-200 shadow-inner mx-auto mb-6">
+                    <QRCodeSVG value={albumUrl} size={200} />
+                  </div>
+                  
+                  <div className="flex gap-2.5 mb-6">
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value={albumUrl} 
+                      className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono text-gray-600 truncate focus:outline-none"
+                    />
+                    <button 
+                      onClick={handleCopy} 
+                      className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold transition-all border border-indigo-200 whitespace-nowrap min-w-[85px]"
+                    >
+                      {copied ? 'Copied!' : 'Copy Link'}
+                    </button>
+                  </div>
+
+                  <button 
+                    onClick={handleGenerateShare} 
+                    className="w-full mb-3 py-2 border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors"
+                  >
+                    Re-upload & Update Live Album
+                  </button>
+                </>
+              )}
+
               <button 
                 onClick={() => setShowQR(false)} 
-                className="w-full py-3 bg-gray-100 text-gray-800 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                className="w-full py-2.5 bg-gray-100 text-gray-800 rounded-xl font-medium hover:bg-gray-200 transition-colors text-sm"
               >
                 Close
               </button>
@@ -1208,6 +1390,24 @@ export const AdminView: React.FC<AdminViewProps> = ({ spreads, settings, onSprea
                  <div className="text-xs text-gray-500 mt-0.5">Vertical tall book style. Ideal for mobile views, vertical phone portraits, and close-up captures.</div>
                </div>
              </button>
+           </div>
+        </div>
+
+        <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-100 shadow-sm mb-8 animate-in fade-in slide-in-from-bottom-3 duration-500">
+           <h2 className="text-xl font-medium mb-4 text-gray-800 flex items-center gap-2">
+              <Bookmark className="text-rose-500" size={24} /> Custom Page Marking
+           </h2>
+           <p className="text-gray-500 text-sm mb-6">Add a custom watermark or subtle footnote text (e.g. couple's names, event names, birthday messages) to the bottom of each inner page.</p>
+           
+           <div className="max-w-xl">
+             <input
+               type="text"
+               value={settings.marking || ''}
+               onChange={(e) => onSettingsChange({ ...settings, marking: e.target.value })}
+               placeholder="e.g., Rahul & Priya • Dec 18, 2026"
+               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all text-sm text-gray-800 placeholder-gray-400"
+             />
+             <p className="text-xs text-gray-400 mt-2">Leave blank to disable page markings.</p>
            </div>
         </div>
 

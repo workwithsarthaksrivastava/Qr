@@ -37,8 +37,9 @@ export const loadSettingsFromDB = async (): Promise<AlbumSettings> => {
 };
 
 const blobUrlMap = new Map<Blob, string>();
-export function getBlobUrl(blob: Blob | null | undefined): string | null {
+export function getBlobUrl(blob: Blob | string | null | undefined): string | null {
   if (!blob) return null;
+  if (typeof blob === 'string') return blob;
   if (!blobUrlMap.has(blob)) {
     blobUrlMap.set(blob, URL.createObjectURL(blob));
   }

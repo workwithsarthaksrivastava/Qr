@@ -7,6 +7,8 @@ interface BookViewProps {
   spreads: SpreadData[];
   settings: AlbumSettings;
   onOpenAdmin: () => void;
+  isSharedView?: boolean;
+  onCustomize?: () => void;
 }
 
 const themeStyles = {
@@ -486,7 +488,7 @@ const PageRenderer = ({ page, defaultImage, themeName }: { page?: any, defaultIm
   );
 };
 
-export const BookView: React.FC<BookViewProps> = ({ spreads, settings, onOpenAdmin }) => {
+export const BookView: React.FC<BookViewProps> = ({ spreads, settings, onOpenAdmin, isSharedView = false, onCustomize }) => {
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [volume, setVolume] = useState(0.5);
   const [isMuted, setIsMuted] = useState(false);
@@ -552,6 +554,45 @@ export const BookView: React.FC<BookViewProps> = ({ spreads, settings, onOpenAdm
     }
   }
 
+  const getMarkingColorClass = (themeName?: string) => {
+    switch (themeName) {
+      case 'neon':
+        return 'text-fuchsia-300 font-semibold opacity-90';
+      case 'cyber':
+        return 'text-cyan-300 font-semibold opacity-90';
+      case 'royal':
+        return 'text-amber-800/90 font-semibold';
+      case 'minimalist':
+        return 'text-neutral-700 font-semibold';
+      case 'floral':
+        return 'text-rose-800/90 font-semibold';
+      case 'vintage':
+        return 'text-stone-700 font-semibold';
+      case 'modern':
+        return 'text-slate-700 font-semibold';
+      case 'midnight':
+        return 'text-gray-700 font-semibold';
+      case 'sunset':
+        return 'text-orange-950 font-semibold';
+      case 'ocean':
+        return 'text-teal-900 font-semibold';
+      case 'forest':
+        return 'text-green-900 font-semibold';
+      case 'pastel':
+        return 'text-pink-800 font-semibold';
+      case 'autumn':
+        return 'text-amber-950 font-semibold';
+      case 'winter':
+        return 'text-blue-900 font-semibold';
+      case 'spring':
+        return 'text-emerald-950 font-semibold';
+      case 'elegant':
+        return 'text-amber-950 font-semibold';
+      default:
+        return 'text-stone-700 font-semibold';
+    }
+  };
+
   // Build sheets
   const sheets = [];
   
@@ -589,6 +630,11 @@ export const BookView: React.FC<BookViewProps> = ({ spreads, settings, onOpenAdm
             ) : (
                <div className="w-full h-full flex items-center justify-center relative z-10"></div>
             )}
+            {settings.marking && (
+               <div className={`absolute bottom-1.5 md:bottom-3 left-1/2 -translate-x-1/2 z-30 select-none text-[9px] md:text-[11px] tracking-[0.25em] md:tracking-[0.35em] uppercase text-center whitespace-nowrap drop-shadow-sm pointer-events-none ${getMarkingColorClass(settings?.theme)}`}>
+                  {settings.marking}
+               </div>
+            )}
             <div className="absolute inset-0 left-auto right-0 bg-gradient-to-l from-black/10 to-transparent w-24 pointer-events-none z-20"></div>
          </div>
       </div>
@@ -609,6 +655,11 @@ export const BookView: React.FC<BookViewProps> = ({ spreads, settings, onOpenAdm
            ) : (
               <div className="w-full h-full flex items-center justify-center relative z-10"></div>
            )}
+           {settings.marking && (
+              <div className={`absolute bottom-1.5 md:bottom-3 left-1/2 -translate-x-1/2 z-30 select-none text-[9px] md:text-[11px] tracking-[0.25em] md:tracking-[0.35em] uppercase text-center whitespace-nowrap drop-shadow-sm pointer-events-none ${getMarkingColorClass(settings?.theme)}`}>
+                 {settings.marking}
+              </div>
+           )}
            <div className="absolute inset-0 bg-gradient-to-r from-black/10 to-transparent w-24 pointer-events-none z-20"></div>
         </div>
       ),
@@ -620,6 +671,11 @@ export const BookView: React.FC<BookViewProps> = ({ spreads, settings, onOpenAdm
               <PageRenderer page={spreads[i].leftPage} defaultImage={spreads[i].leftImage} themeName={settings?.theme} />
            ) : (
               <div className="w-full h-full flex items-center justify-center relative z-10"></div>
+           )}
+           {settings.marking && (
+              <div className={`absolute bottom-1.5 md:bottom-3 left-1/2 -translate-x-1/2 z-30 select-none text-[9px] md:text-[11px] tracking-[0.25em] md:tracking-[0.35em] uppercase text-center whitespace-nowrap drop-shadow-sm pointer-events-none ${getMarkingColorClass(settings?.theme)}`}>
+                 {settings.marking}
+              </div>
            )}
            <div className="absolute inset-0 left-auto right-0 bg-gradient-to-l from-black/10 to-transparent w-24 pointer-events-none z-20"></div>
         </div>
@@ -641,6 +697,11 @@ export const BookView: React.FC<BookViewProps> = ({ spreads, settings, onOpenAdm
            ) : (
               <div className="w-full h-full flex items-center justify-center relative z-10"></div>
            )}
+           {settings.marking && (
+              <div className={`absolute bottom-1.5 md:bottom-3 left-1/2 -translate-x-1/2 z-30 select-none text-[9px] md:text-[11px] tracking-[0.25em] md:tracking-[0.35em] uppercase text-center whitespace-nowrap drop-shadow-sm pointer-events-none ${getMarkingColorClass(settings?.theme)}`}>
+                 {settings.marking}
+              </div>
+           )}
            <div className="absolute inset-0 bg-gradient-to-r from-black/10 to-transparent w-24 pointer-events-none z-20"></div>
          </div>
       </div>
@@ -660,9 +721,32 @@ export const BookView: React.FC<BookViewProps> = ({ spreads, settings, onOpenAdm
     <div className={`relative min-h-screen ${currentTheme.bg} overflow-hidden flex flex-col items-center justify-center font-sans transition-colors duration-1000`} onClick={handleStartInteraction}>
       <div className={`absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] ${currentTheme.gradient} pointer-events-none transition-colors duration-1000`}></div>
       
-      <button onClick={onOpenAdmin} className={`absolute top-6 right-6 p-3 ${currentTheme.buttonBase} rounded-full backdrop-blur-sm transition-all z-50`}>
-        <Settings size={20} />
-      </button>
+      {!isSharedView && (
+        <button onClick={onOpenAdmin} className={`absolute top-6 right-6 p-3 ${currentTheme.buttonBase} rounded-full backdrop-blur-sm transition-all z-50`}>
+          <Settings size={20} />
+        </button>
+      )}
+
+      {isSharedView && (
+        <div className="absolute top-6 left-6 right-6 flex items-center justify-between gap-4 z-50 bg-black/40 backdrop-blur-md border border-white/10 p-3.5 px-6 rounded-2xl shadow-xl max-w-xl mx-auto sm:right-auto sm:min-w-[420px]">
+          <div className="flex items-center gap-3">
+            <div className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </div>
+            <div>
+              <div className="text-sm font-semibold tracking-wide text-white">Shared Celebration Album</div>
+              <p className="text-[10px] text-white/60">Scanned via QR Code</p>
+            </div>
+          </div>
+          <button 
+            onClick={(e) => { e.stopPropagation(); onCustomize?.(); }} 
+            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 whitespace-nowrap"
+          >
+            Customize This Copy
+          </button>
+        </div>
+      )}
 
       {settings.audioFile && (
         <div className={`absolute bottom-6 right-6 flex items-center gap-4 ${currentTheme.buttonBase} backdrop-blur-md p-3 px-5 rounded-full z-50 shadow-lg`}>

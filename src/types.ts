@@ -39,4 +39,5 @@ export interface AlbumSettings {
   coverPhoto?: Blob | null;
   coverPhotoTransform?: ImageTransform;
   orientation?: 'landscape' | 'portrait';
+  marking?: string;
 }

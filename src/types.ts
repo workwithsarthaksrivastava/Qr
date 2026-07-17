@@ -40,4 +40,17 @@ export interface AlbumSettings {
   coverPhotoTransform?: ImageTransform;
   orientation?: 'landscape' | 'portrait';
   marking?: string;
+  accessCode?: string;
 }
+
+export interface LocalAlbum {
+  id: string;
+  name: string;
+  spreads: SpreadData[];
+  settings: AlbumSettings;
+  createdAt: string;
+  updatedAt: string;
+  sharedUrl?: string | null;
+  accessCode?: string;
+}
+

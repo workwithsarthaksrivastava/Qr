@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SpreadData, AlbumSettings, ThemeType } from '../types';
 import { getBlobUrl } from '../lib/db';
-import { ChevronLeft, ChevronRight, Settings, Volume2, VolumeX } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings, Volume2, VolumeX, BookMarked } from 'lucide-react';
 
 interface BookViewProps {
   spreads: SpreadData[];
@@ -9,6 +9,7 @@ interface BookViewProps {
   onOpenAdmin: () => void;
   isSharedView?: boolean;
   onCustomize?: () => void;
+  onGoHome?: () => void;
 }
 
 const themeStyles = {
@@ -488,7 +489,7 @@ const PageRenderer = ({ page, defaultImage, themeName }: { page?: any, defaultIm
   );
 };
 
-export const BookView: React.FC<BookViewProps> = ({ spreads, settings, onOpenAdmin, isSharedView = false, onCustomize }) => {
+export const BookView: React.FC<BookViewProps> = ({ spreads, settings, onOpenAdmin, isSharedView = false, onCustomize, onGoHome }) => {
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [volume, setVolume] = useState(0.5);
   const [isMuted, setIsMuted] = useState(false);
@@ -722,31 +723,28 @@ export const BookView: React.FC<BookViewProps> = ({ spreads, settings, onOpenAdm
       <div className={`absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] ${currentTheme.gradient} pointer-events-none transition-colors duration-1000`}></div>
       
       {!isSharedView && (
-        <button onClick={onOpenAdmin} className={`absolute top-6 right-6 p-3 ${currentTheme.buttonBase} rounded-full backdrop-blur-sm transition-all z-50`}>
-          <Settings size={20} />
-        </button>
-      )}
-
-      {isSharedView && (
-        <div className="absolute top-6 left-6 right-6 flex items-center justify-between gap-4 z-50 bg-black/40 backdrop-blur-md border border-white/10 p-3.5 px-6 rounded-2xl shadow-xl max-w-xl mx-auto sm:right-auto sm:min-w-[420px]">
-          <div className="flex items-center gap-3">
-            <div className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-            </div>
-            <div>
-              <div className="text-sm font-semibold tracking-wide text-white">Shared Celebration Album</div>
-              <p className="text-[10px] text-white/60">Scanned via QR Code</p>
-            </div>
-          </div>
+        <div className="absolute top-6 right-6 flex items-center gap-3 z-50">
+          {onGoHome && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onGoHome(); }} 
+              className={`p-3 ${currentTheme.buttonBase} rounded-full backdrop-blur-sm transition-all flex items-center gap-2 px-4 text-xs font-semibold`}
+              title="Dashboard"
+            >
+              <BookMarked size={16} />
+              <span>All Albums</span>
+            </button>
+          )}
           <button 
-            onClick={(e) => { e.stopPropagation(); onCustomize?.(); }} 
-            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 whitespace-nowrap"
+            onClick={(e) => { e.stopPropagation(); onOpenAdmin(); }} 
+            className={`p-3 ${currentTheme.buttonBase} rounded-full backdrop-blur-sm transition-all`}
+            title="Album Administration"
           >
-            Customize This Copy
+            <Settings size={18} />
           </button>
         </div>
       )}
+
+
 
       {settings.audioFile && (
         <div className={`absolute bottom-6 right-6 flex items-center gap-4 ${currentTheme.buttonBase} backdrop-blur-md p-3 px-5 rounded-full z-50 shadow-lg`}>
@@ -772,9 +770,11 @@ export const BookView: React.FC<BookViewProps> = ({ spreads, settings, onOpenAdm
       {spreads.length === 0 ? (
         <div className="z-10 text-center text-white/70">
           <p className="mb-6 text-lg tracking-wide font-light">Your celebration album is currently empty.</p>
-          <button onClick={onOpenAdmin} className={`px-8 py-3 ${currentTheme.primaryButton} rounded-full font-medium transition-all hover:scale-105 active:scale-95`}>
-            Create Album
-          </button>
+          {!isSharedView && (
+            <button onClick={onOpenAdmin} className={`px-8 py-3 ${currentTheme.primaryButton} rounded-full font-medium transition-all hover:scale-105 active:scale-95`}>
+              Create Album
+            </button>
+          )}
         </div>
       ) : (
         <div className={`relative z-10 w-full ${isPortrait ? 'max-w-4xl aspect-[3/2]' : 'max-w-6xl aspect-[8/3]'} max-h-[80vh] flex items-center justify-center px-4 md:px-16`}>

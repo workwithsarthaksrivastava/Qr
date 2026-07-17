@@ -79,6 +79,14 @@ function loadLocalAlbums(): Record<string, any> {
 // Helper: Save local album
 function saveLocalAlbum(id: string, album: any) {
   const albums = loadLocalAlbums();
+  
+  // Ensure accessCode is set at root
+  const accessCode = album.accessCode || album.settings?.accessCode || albums[id]?.accessCode;
+  album.accessCode = accessCode;
+  if (album.settings) {
+    album.settings.accessCode = accessCode;
+  }
+  
   albums[id] = album;
   try {
     fs.writeFileSync(albumsFilePath, JSON.stringify(albums, null, 2), "utf-8");
@@ -102,31 +110,11 @@ function getAppUrl(req: express.Request): string {
     appUrl = `${protocol}://${host}`;
   }
   
-  // Convert ais-dev- development domains to the publicly shareable ais-pre- environment
-  if (appUrl.includes("ais-dev-")) {
-    appUrl = appUrl.replace("ais-dev-", "ais-pre-");
-  }
-  
   return appUrl.endsWith("/") ? appUrl.slice(0, -1) : appUrl;
 }
 
 // Helper: Recursively sanitize any occurrence of 'ais-dev-' to 'ais-pre-' in structures (for assets / links)
 function sanitizeDevUrls(obj: any): any {
-  if (typeof obj === "string") {
-    return obj.replace(/ais-dev-/g, "ais-pre-");
-  }
-  if (Array.isArray(obj)) {
-    return obj.map(sanitizeDevUrls);
-  }
-  if (obj !== null && typeof obj === "object") {
-    const newObj: any = {};
-    for (const key in obj) {
-      if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        newObj[key] = sanitizeDevUrls(obj[key]);
-      }
-    }
-    return newObj;
-  }
   return obj;
 }
 
@@ -142,8 +130,7 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
-  const cleanAppUrl = getAppUrl(req);
-  const fileUrl = `${cleanAppUrl}/uploads/${req.file.filename}`;
+  const fileUrl = `/uploads/${req.file.filename}`;
   
   res.json({ url: fileUrl });
 });
@@ -162,6 +149,35 @@ app.post("/api/albums", async (req, res, next) => {
     const sanitizedSpreads = sanitizeDevUrls(parsedSpreads);
     const sanitizedSettings = sanitizeDevUrls(parsedSettings);
 
+    // 1. Generate or retrieve unique access code
+    const albums = loadLocalAlbums();
+    let accessCode = sanitizedSettings.accessCode || albums[id]?.accessCode || albums[id]?.settings?.accessCode;
+    
+    if (!accessCode) {
+      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+      let isUnique = false;
+      let attempts = 0;
+      while (!isUnique && attempts < 100) {
+        let code = "";
+        for (let i = 0; i < 6; i++) {
+          code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        // Check uniqueness in local fallback
+        const exists = Object.values(albums).some((alb: any) => alb.accessCode === code || (alb.settings && alb.settings.accessCode === code));
+        if (!exists) {
+          accessCode = code;
+          isUnique = true;
+        }
+        attempts++;
+      }
+      if (!accessCode) {
+        accessCode = id.substring(0, 6).toUpperCase();
+      }
+    }
+
+    // Attach accessCode to settings so it is persisted in the database column
+    sanitizedSettings.accessCode = accessCode;
+
     const supabase = getSupabase();
     let savedToSupabase = false;
 
@@ -179,7 +195,7 @@ app.post("/api/albums", async (req, res, next) => {
 
         if (!error) {
           savedToSupabase = true;
-          console.log(`Album ${id} successfully saved to Supabase.`);
+          console.log(`Album ${id} (code: ${accessCode}) successfully saved to Supabase.`);
         } else {
           console.warn("Supabase insert error, falling back to local file:", error.message);
         }
@@ -189,16 +205,86 @@ app.post("/api/albums", async (req, res, next) => {
     }
 
     // Always save to local fallback as a safety net or if Supabase is not present/failed
-    saveLocalAlbum(id, { spreads: sanitizedSpreads, settings: sanitizedSettings });
+    saveLocalAlbum(id, { spreads: sanitizedSpreads, settings: sanitizedSettings, accessCode });
 
     const cleanAppUrl = getAppUrl(req);
 
     res.json({
       success: true,
       id,
+      accessCode,
       savedToSupabase,
-      url: `${cleanAppUrl}/?album=${id}`,
+      url: `${cleanAppUrl}/?code=${accessCode}`,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get Album by Access Code Endpoint
+app.get("/api/albums/code/:code", async (req, res, next) => {
+  try {
+    const code = req.params.code.trim().toUpperCase();
+    if (!code) {
+      return res.status(400).json({ error: "Missing or invalid access code" });
+    }
+
+    const albums = loadLocalAlbums();
+    let albumId: string | null = null;
+    let albumData: any = null;
+
+    // Search local albums
+    for (const [id, value] of Object.entries(albums)) {
+      const val = value as any;
+      if (val.accessCode === code || (val.settings && val.settings.accessCode === code)) {
+        albumId = id;
+        albumData = val;
+        break;
+      }
+    }
+
+    if (albumData && albumId) {
+      return res.json({
+        id: albumId,
+        spreads: sanitizeDevUrls(albumData.spreads),
+        settings: sanitizeDevUrls(albumData.settings),
+        accessCode: code,
+        source: "local",
+      });
+    }
+
+    // Fallback to searching in Supabase if enabled
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("albums")
+          .select("*");
+          
+        if (!error && data) {
+          const match = data.find((row: any) => {
+            const parsedSettings = typeof row.settings === "string" ? JSON.parse(row.settings) : row.settings;
+            return parsedSettings && parsedSettings.accessCode === code;
+          });
+
+          if (match) {
+            const spreads = typeof match.spreads === "string" ? JSON.parse(match.spreads) : match.spreads;
+            const settings = typeof match.settings === "string" ? JSON.parse(match.settings) : match.settings;
+            return res.json({
+              id: match.id,
+              spreads: sanitizeDevUrls(spreads),
+              settings: sanitizeDevUrls(settings),
+              accessCode: code,
+              source: "supabase",
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Supabase query by code failed:", err);
+      }
+    }
+
+    res.status(404).json({ error: "Album with this access code not found" });
   } catch (err) {
     next(err);
   }

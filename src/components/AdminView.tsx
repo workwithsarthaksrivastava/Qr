@@ -903,18 +903,21 @@ const PageEditor = ({ page, onChange, label, orientation }: { page?: PageData, o
 };
 
 interface AdminViewProps {
+  albumId?: string | null;
   spreads: SpreadData[];
   settings: AlbumSettings;
   onSpreadsChange: (spreads: SpreadData[]) => void;
   onSettingsChange: (settings: AlbumSettings) => void;
   onClose: () => void;
+  onSaveSharedUrl?: (url: string, accessCode?: string) => void;
 }
 
-export const AdminView: React.FC<AdminViewProps> = ({ spreads, settings, onSpreadsChange, onSettingsChange, onClose }) => {
+export const AdminView: React.FC<AdminViewProps> = ({ albumId, spreads, settings, onSpreadsChange, onSettingsChange, onClose, onSaveSharedUrl }) => {
   const [showQR, setShowQR] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateStep, setGenerateStep] = useState('');
   const [albumUrl, setAlbumUrl] = useState('');
+  const [accessCode, setAccessCode] = useState(settings.accessCode || '');
   const [generateError, setGenerateError] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -997,12 +1000,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ spreads, settings, onSprea
 
       // 3. Save album metadata to backend
       setGenerateStep('Saving album configuration...');
-      const albumId = uuidv4();
+      const targetId = albumId || uuidv4();
       const res = await fetch('/api/albums', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: albumId,
+          id: targetId,
           spreads: uploadedSpreads,
           settings: uploadedSettings
         })
@@ -1013,14 +1016,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ spreads, settings, onSprea
       
       let finalUrl = data.url;
       if (!finalUrl || finalUrl.includes('localhost')) {
-        finalUrl = `${window.location.origin}/?album=${albumId}`;
+        finalUrl = `${window.location.origin}/?code=${data.accessCode || targetId}`;
       } else {
         finalUrl = finalUrl.replace('/album/', '/?album=');
       }
-      if (finalUrl.includes('ais-dev-')) {
-        finalUrl = finalUrl.replace('ais-dev-', 'ais-pre-');
-      }
       setAlbumUrl(finalUrl);
+      if (data.accessCode) {
+        setAccessCode(data.accessCode);
+      }
+      if (onSaveSharedUrl) {
+        onSaveSharedUrl(finalUrl, data.accessCode);
+      }
       setGenerateStep('Successfully generated!');
     } catch (err: any) {
       console.error(err);
@@ -1239,14 +1245,27 @@ export const AdminView: React.FC<AdminViewProps> = ({ spreads, settings, onSprea
 
               {albumUrl && !isGenerating && (
                 <>
-                  <p className="text-gray-500 mb-6 text-xs px-2">
-                    Your celebration album is now live! Scan this unique QR code with any device to view the album with exact layouts, themes, and audio.
+                  <p className="text-gray-500 mb-4 text-xs px-2">
+                    Your celebration album is now live! Scan the QR code or use the unique access code below to view and guest-book from any device.
                   </p>
-                  <div className="bg-white p-4 inline-block rounded-xl border border-gray-200 shadow-inner mx-auto mb-6">
-                    <QRCodeSVG value={albumUrl} size={200} />
+                  
+                  {accessCode && (
+                    <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 mb-5 text-center shadow-inner">
+                      <span className="text-[10px] text-amber-600 font-bold uppercase tracking-wider block mb-1.5">Album Access Code</span>
+                      <span className="text-2xl font-extrabold text-slate-800 tracking-widest font-mono bg-amber-500/10 border border-amber-500/20 px-5 py-1.5 rounded-xl inline-block shadow-sm">
+                        {accessCode}
+                      </span>
+                      <p className="text-[10px] text-slate-500 mt-2 max-w-[280px] mx-auto leading-relaxed">
+                        Anyone can view this album by typing this code on the home dashboard.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="bg-white p-4 inline-block rounded-xl border border-gray-200 shadow-inner mx-auto mb-5">
+                    <QRCodeSVG value={albumUrl} size={180} />
                   </div>
                   
-                  <div className="flex gap-2.5 mb-6">
+                  <div className="flex gap-2.5 mb-5">
                     <input 
                       type="text" 
                       readOnly 

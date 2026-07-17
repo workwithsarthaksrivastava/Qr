@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Celebration Album",
+  "description": "An interactive digital guest book and celebration album with customizable themes, page layouts, audio playback, and photo uploads.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
